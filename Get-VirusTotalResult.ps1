@@ -194,7 +194,7 @@ function Invoke-VTScan {
             $b = (Get-AsciiBytes ('Content-Disposition: form-data; name="file"; filename="' + $file.Name + '";'))
             $body.Write($b, 0, $b.Length)
             $body.Write($CRLF, 0, $CRLF.Length)            
-            $b = (GgetAsciiBytes 'Content-Type:application/octet-stream')
+            $b = (Get-AsciiBytes 'Content-Type:application/octet-stream')
             $body.Write($b, 0, $b.Length)
             
             $body.Write($CRLF, 0, $CRLF.Length)
@@ -267,6 +267,7 @@ function Invoke-VTRescan {
 #  Invoke-VTRescan
 
 Set-VTApiKey $ApiKey
+# Cannot bind argument to parameter 'VTApiKey' because it is an empty string.
 
 if ($File -ne $null -and (Get-Item $File).Exists) {
     Get-VTReport -file (Get-Item $File)
