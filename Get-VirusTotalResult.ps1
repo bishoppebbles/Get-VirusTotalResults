@@ -13,10 +13,12 @@
     File Name : VirusTotal.ps1 incorporates code that is completely copied from David B Heise's VirusTotal.psm1.
     Author    : David B Heise, Sam Pursglove
 .LINK
-    https://psvirustotal.codeplex.com
+    https://github.com/DBHeise/Powershell/blob/master/Modules/VirusTotal/VirusTotal.psm1
 .EXAMPLE
 
 #>
+
+Add-Type -AssemblyName System.Security
 
 param 
 (
@@ -256,23 +258,39 @@ function Invoke-VTRescan {
     }    
 }
 
-####################################################################
 
-#  -Functions-
-#  Set-VTApiKey
-#  Get-VTApiKey
-#  Get-VTReport
-#  Invoke-VTScan
-#  New-VTComment
-#  Invoke-VTRescan
-
-Set-VTApiKey $ApiKey
-# Cannot bind argument to parameter 'VTApiKey' because it is an empty string.
-
-if ($null -ne $File -and (Get-Item $File).Exists) {
-    Get-VTReport -file (Get-Item $File)
-} elseif ($Hash.Length -gt 0) {
-    Get-VTReport -hash $Hash
-} else {
-    Write-Host "A file or file hash must be provided for submission to VirusTotal."
+function Remove-VTApiKey {
+    [CmdletBinding()]
+    Param([String] $vtFileLocation = $(Join-Path $env:APPDATA 'virustotal.bin'))
+    if (Test-Path $vtfileLocation) {
+        Remove-Item $vtFileLocation
+    } else {
+        throw "VTApiKey does not exist"
+    }
 }
+
+
+$secStrApiKey = Read-Host 'Enter VirusTotal API Key' -AsSecureString
+Set-VTApiKey $([System.Net.NetworkCredential]::new('', $secStrApiKey).Password)
+
+$processes = Get-Process | Where-Object {$_.Path -notlike ''}
+
+$hashedProcesses = $(foreach ($process in $processes) {
+        Get-FileHash $process.Path -ErrorAction SilentlyContinue | 
+            Select-Object Hash -ExpandProperty Hash
+}) | Sort-Object | Get-Unique -AsString
+
+# rate limit to $queries/min
+$count = 0
+$queries = 4
+
+$hashOutput = foreach ($hash in $hashedProcesses) {
+    Get-VTReport -hash $hash 
+    $count++
+    if (($count % $queries) -eq 0) {
+        $count = 0
+        Start-Sleep -Seconds 60
+    }
+}
+
+Remove-VTApiKey
