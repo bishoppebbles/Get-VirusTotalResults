@@ -280,6 +280,13 @@ $hashedProcesses = $(foreach ($process in $processes) {
             Select-Object Hash -ExpandProperty Hash
 }) | Sort-Object | Get-Unique -AsString
 
+<# NOTES
+$proc = Get-Process
+foreach($p in $proc) {
+    Add-Member -InputObject $p -NotePropertyName 'Hash' -NotePropertyValue (Get-FileHash $p.Path).Hash
+}
+#>
+
 # rate limit to $queries/min
 $count = 0
 $queries = 4
