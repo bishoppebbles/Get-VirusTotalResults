@@ -291,7 +291,7 @@ foreach($p in $proc) {
 $hash = Import-Csv .\new_processes.csv
 foreach($h in $hash) {
     if($h.Path -imatch '^C:\\Users\\') {
-        $h.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
+        $h.Path = $h.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
     }
 }
 $hash | Sort-Object Hash,Path,Name -Unique | Export-Csv -Path unique_processes.csv -NoTypeInformation
