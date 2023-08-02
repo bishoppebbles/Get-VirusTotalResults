@@ -287,7 +287,7 @@ foreach($p in $proc) {
 }
 
 
-# Reads in a CSV with Name|Path|Hash fields, replaces the user name with * for any path that starts with C:\Users\, and then uniques the results
+# Reads in a CSV with Name|Path|Hash fields, replaces the user name with * for any path that starts with C:\Users\<name>\, and then uniques the results
 $hash = Import-Csv .\new_processes.csv
 foreach($h in $hash) {
     if($h.Path -imatch '^C:\\Users\\') {
