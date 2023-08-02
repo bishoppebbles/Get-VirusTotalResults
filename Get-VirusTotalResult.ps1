@@ -285,6 +285,16 @@ $proc = Get-Process
 foreach($p in $proc) {
     Add-Member -InputObject $p -NotePropertyName 'Hash' -NotePropertyValue (Get-FileHash $p.Path).Hash
 }
+
+
+# Reads in a CSV with Name|Path|Hash fields, replaces the user name with * for any path that starts with C:\Users\, and then uniques the results
+$hash = Import-Csv .\new_processes.csv
+foreach($h in $hash) {
+    if($h.Path -imatch '^C:\\Users\\') {
+        $h.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
+    }
+}
+$hash | Sort-Object Hash,Path,Name -Unique | Export-Csv -Path unique_processes.csv -NoTypeInformation
 #>
 
 # rate limit to $queries/min
