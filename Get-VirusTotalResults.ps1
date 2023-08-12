@@ -350,6 +350,6 @@ foreach ($entry in $sortedUniqueExes) {
     }
 }
 
-$sortedUniqueExes | Export-Csv -Path "VTDB_$(Get-Date -Format FileDateUniversal).db"
+$sortedUniqueExes | Export-Csv -Path "VTDB_$(Get-Date -Format FileDateUniversal).vtdb" -NoTypeInformation
 
 Remove-VTApiKey
