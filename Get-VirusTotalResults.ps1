@@ -5,6 +5,8 @@
     Powershell Module for interaction with Virus Total's API
 .PARAMETER CsvFile
     The CSV file to import containing the process name, path, and hash information.
+.PARAMETER Queries
+    Rate limit for the number of VirusTotal API queries to make per minutes (default = 4).
 .PARAMETER ForceClearApiKey
     Clear an existing API key entry so a new one can be entered.
 .NOTES
@@ -21,6 +23,8 @@ Add-Type -AssemblyName System.Security
 Param (
     [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
     [System.IO.FileInfo]$CsvFile,
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the number of VT API queries/minute. (default=4)')]
+    [int]$Queries = 4,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Clear the existing API key.')]
     [switch]$ForceClearApiKey
 )
@@ -307,9 +311,9 @@ $sortedUniqueExes = Import-ExeCsvData $CsvFile
 
 # rate limit to $queries/min
 $count = 0      # tracks VT request rate limit
-$queries = 200
-
 $counter = 0    # tracks Write-Progress
+
+$Queries = 200
 
 foreach ($entry in $sortedUniqueExes) {
     $activity        = "Get-VTReport ($($count) of $($sortedUniqueExes.Length))"
@@ -349,7 +353,7 @@ foreach ($entry in $sortedUniqueExes) {
     
     # rate limit the submissions
     $count++
-    if (($count % $queries) -eq 0) {
+    if (($count % $Queries) -eq 0) {
         Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete -CurrentOperation "Rate limit reached. Pausing."
         $count = 0
         Start-Sleep -Seconds 10
