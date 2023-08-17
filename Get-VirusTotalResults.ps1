@@ -3,12 +3,10 @@
     Virus Total Module
 .DESCRIPTION
     Powershell Module for interaction with Virus Total's API
-.PARAMETER ApiKey
-    Your personal VirusTotal key.  It should not be disclosed to anyone that you do not trust.  Do not embed it in scripts or software from which it can be easily retrieved if you care about its confidentiality.
-.PARAMETER File
-    The file to scan.
-.PARAMETER Hash
-    The hash of the file to scan.
+.PARAMETER CsvFile
+    The CSV file to import containing the process name, path, and hash information.
+.PARAMETER ForceClearApiKey
+    Clear an existing API key entry so a new one can be entered.
 .NOTES
     File Name : VirusTotal.ps1 incorporates code that is completely copied from David B Heise's VirusTotal.psm1.
     Author    : David B Heise, Sam Pursglove
@@ -20,14 +18,11 @@
 
 Add-Type -AssemblyName System.Security
 
-param 
-(
-    [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Enter your VirusTotal API key.')]
-    [string]$ApiKey,
-    [Parameter(Position=1,Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
-    [System.IO.FileInfo]$File,
-    [Parameter(Position=2,Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Provide the hash of the file to scan.')]
-    [string]$Hash
+Param (
+    [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
+    [System.IO.FileInfo]$CsvFile,
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Clear the existing API key.')]
+    [switch]$ForceClearApiKey
 )
 
 ####################################################################
@@ -142,7 +137,7 @@ function Get-VTReport {
             $body = @{ domain = $domain; apikey = $VTApiKey}}
         }        
 
-        return Invoke-RestMethod -Method $method -Uri $u -Body $body
+        Invoke-RestMethod -Method $method -Uri $u -Body $body
     }    
 }
 
@@ -240,7 +235,7 @@ function New-VTComment {
         $method = 'POST'
         $body = @{ resource = $hash; apikey = $VTApiKey; comment = $Comment}
 
-        return Invoke-RestMethod -Method $method -Uri $u -Body $body
+        Invoke-RestMethod -Method $method -Uri $u -Body $body
     }    
 }
 
@@ -254,7 +249,8 @@ function Invoke-VTRescan {
         $u = 'https://www.virustotal.com/vtapi/v2/file/rescan'
         $method = 'POST'
         $body = @{ resource = $hash; apikey = $VTApiKey}
-        return Invoke-RestMethod -Method $method -Uri $u -Body $body
+        
+        Invoke-RestMethod -Method $method -Uri $u -Body $body
     }    
 }
 
@@ -270,15 +266,35 @@ function Remove-VTApiKey {
 }
 
 
-if($ForceAPIKey) {
+function Import-ExeCsvData {
+    Param([Parameter(Position=0,Mandatory=$true)][System.IO.FileInfo]$file)
+
+    $exes = Import-Csv $file | 
+                Select-Object Name,Path,Hash,Positives,Total,ScanDate,ScanResults | 
+                Where-Object {$_.Hash -notlike ''}
+    
+    # Modify exe file paths if C:\User\<username>\... is included so there's a single, unique path C:\User\*\... for all
+    foreach($e in $exes) {
+        if($e.Path -imatch '^C:\\Users\\') {
+            $e.Path = $e.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
+            }
+    }
+
+    $exes | Sort-Object Path,Hash -Unique
+}
+
+
+[SecureString]$secStrApiKey | Out-Null
+
+if($ForceClearApiKey) {
     $secStrApiKey.Clear()
 }
 
-if($secStrApiKey -eq 0) {
+# if the script is run multiple times only prompt for the API key the first time (or if it is force cleared)
+if($secStrApiKey.Length -eq 0) {
     $secStrApiKey = Read-Host 'Enter VirusTotal API Key' -AsSecureString
+    Set-VTApiKey $([System.Net.NetworkCredential]::new('', $secStrApiKey).Password)
 }
-
-Set-VTApiKey $([System.Net.NetworkCredential]::new('', $secStrApiKey).Password)
 
 <# NOTES
 $proc = Get-Process
@@ -286,18 +302,8 @@ foreach($p in $proc) {
     Add-Member -InputObject $p -NotePropertyName 'Hash' -NotePropertyValue (Get-FileHash $p.Path).Hash
 }
 #>
-
-$exes = Import-Csv .\unique_processes.csv | 
-            Select-Object Name,Path,Hash,Positives,Total,ScanDate,ScanResults | 
-            Where-Object {$_.Hash -notlike ''}
-    
-foreach($file in $exes) {
-    if($file.Path -imatch '^C:\\Users\\') {
-        $file.Path = $file.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
-        }
-}
-    
-$sortedUniqueExes = $exes | Sort-Object Path,Hash -Unique
+ 
+$sortedUniqueExes = Import-ExeCsvData $CsvFile  
 
 # rate limit to $queries/min
 $count = 0      # tracks VT request rate limit
