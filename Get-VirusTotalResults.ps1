@@ -5,6 +5,8 @@
     Powershell Module for interaction with Virus Total's API
 .PARAMETER CsvFile
     The CSV file to import containing the process name, path, and hash information.
+.PARAMETER VTDB
+    The CSV file to import containing the process name, path, and hash information.
 .PARAMETER Queries
     Rate limit for the number of VirusTotal API queries to make per minutes (default = 4).
 .PARAMETER ForceClearApiKey
@@ -22,9 +24,11 @@ Add-Type -AssemblyName System.Security
 
 Param (
     [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
-    [System.IO.FileInfo]$CsvFile,
+    $CsvFile,
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the existing local VirusTotal database.')]
+    $VTDB,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the number of VT API queries/minute. (default=4)')]
-    [int]$Queries = 4,
+    [int]$Queries=4,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Clear the existing API key.')]
     [switch]$ForceClearApiKey
 )
@@ -280,7 +284,7 @@ function Import-ExeCsvData {
     # Modify exe file paths if C:\User\<username>\... is included so there's a single, unique path C:\User\*\... for all
     foreach($e in $exes) {
         if($e.Path -imatch '^C:\\Users\\') {
-            $e.Path = $e.Path -ireplace '(^C:\\Users\\)(\w+)(.+)','$1*$3'
+            $e.Path = $e.Path -ireplace '(^C:\\Users\\)(.+?)(\\.+)','$1*$3'
             }
     }
 
@@ -298,6 +302,14 @@ if($ForceClearApiKey) {
 if($secStrApiKey.Length -eq 0) {
     $secStrApiKey = Read-Host 'Enter VirusTotal API Key' -AsSecureString
     Set-VTApiKey $([System.Net.NetworkCredential]::new('', $secStrApiKey).Password)
+}
+
+# load the existing local copy of the VT database
+
+if(Test-Path .\VTDB_*.vtdb) {
+    $VTDB = Import-Csv .\VTDB_*.vtdb
+} else {
+    Write-Output 'No local VT database '
 }
 
 <# NOTES
