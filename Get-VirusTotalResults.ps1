@@ -20,8 +20,6 @@
 
 #>
 
-Add-Type -AssemblyName System.Security
-
 Param (
     [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
     $CsvFile,
@@ -50,6 +48,9 @@ Param (
 # It was released under the Microsoft Public License (Ms-PL)
 #
 ####################################################################
+
+
+Add-Type -AssemblyName System.Security
 
 function Set-VTApiKey {
     [CmdletBinding()]
@@ -306,8 +307,8 @@ if($secStrApiKey.Length -eq 0) {
 
 # load the existing local copy of the VT database
 
-if(Test-Path .\VTDB_*.vtdb) {
-    $VTDB = Import-Csv .\VTDB_*.vtdb
+if(Test-Path .\VTDB_*.json) {
+    $VTDB = Get-Content .\VTDB_*.json | ConvertFrom-Json
 } else {
     Write-Output 'No local VT database '
 }
@@ -319,20 +320,19 @@ foreach($p in $proc) {
 }
 #>
  
-$sortedUniqueExes = Import-ExeCsvData $CsvFile  
+$sortedUniqueExes = Import-ExeCsvData $CsvFile
 
 # rate limit to $queries/min
 $count = 0      # tracks VT request rate limit
 $counter = 0    # tracks Write-Progress
 
-$Queries = 200
+$Queries = 500
 
 foreach ($entry in $sortedUniqueExes) {
-    $activity        = "Get-VTReport ($($count) of $($sortedUniqueExes.Length))"
+    $activity        = "Get-VTReport ($($counter) of $($sortedUniqueExes.Length))"
     $currentStatus   = "Getting results for $($entry.Path)"
-    $percentComplete = [int](($counter/$sortedUniqueExes.Length)*100)
+    $percentComplete = [int](($counter/$sortedUniqueExes.Length) * 100)
     Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete
-
 
     $report = Get-VTReport -hash $entry.Hash
 
@@ -365,6 +365,7 @@ foreach ($entry in $sortedUniqueExes) {
     
     # rate limit the submissions
     $count++
+    $counter++
     if (($count % $Queries) -eq 0) {
         Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete -CurrentOperation "Rate limit reached. Pausing."
         $count = 0
@@ -372,6 +373,6 @@ foreach ($entry in $sortedUniqueExes) {
     }
 }
 
-$sortedUniqueExes | Export-Csv -Path "VTDB_$(Get-Date -Format FileDateUniversal).vtdb" -NoTypeInformation
+$sortedUniqueExes | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
 
 Remove-VTApiKey
