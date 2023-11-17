@@ -279,14 +279,14 @@ function Import-ExeCsvData {
     Param([Parameter(Position=0,Mandatory=$true)][System.IO.FileInfo]$file)
 
     $exes = Import-Csv $file | 
-                Select-Object Name,Path,Hash,Positives,Total,ScanDate,ScanResults | 
+                Select-Object Name,Path,Hash,Positives,Total,ScanDate,ScanResults,Link | 
                 Where-Object {$_.Hash -notlike ''}
     
     # Modify exe file paths if C:\User\<username>\... is included so there's a single, unique path C:\User\*\... for all
     foreach($e in $exes) {
         if($e.Path -imatch '^C:\\Users\\') {
             $e.Path = $e.Path -ireplace '(^C:\\Users\\)(.+?)(\\.+)','$1*$3'
-            }
+        }
     }
 
     $exes | Sort-Object Path,Hash -Unique
@@ -340,6 +340,7 @@ foreach ($entry in $sortedUniqueExes) {
         $entry.Positives = [int]$report.positives
         $entry.Total     = [int]$report.total
         $entry.ScanDate  = [datetime]$report.scan_date
+        $entry.Link      = "$($report.permalink)"
 
         # get A/V vendor name and result for positive results
         if($report.positives -gt 0) {
