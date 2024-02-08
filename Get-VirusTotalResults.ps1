@@ -12,8 +12,10 @@
 .PARAMETER ForceClearApiKey
     Clear an existing API key entry so a new one can be entered.
 .NOTES
-    File Name : VirusTotal.ps1 incorporates code that is completely copied from David B Heise's VirusTotal.psm1.
+    File Name : VirusTotal.ps1 incorporates code that is copied from David B Heise's VirusTotal.psm1.
     Author    : David B Heise, Sam Pursglove
+    Version: 0.1
+    Date: 08 February 2024
 .LINK
     https://github.com/DBHeise/Powershell/blob/master/Modules/VirusTotal/VirusTotal.psm1
 .EXAMPLE
@@ -22,11 +24,13 @@
 
 Param (
     [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
-    $CsvFile,
-    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the existing local VirusTotal database.')]
-    $VTDB,
+    [string]$CsvFile,
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Explicitly set the existing local VirusTotal database.')]
+    [string]$VirusTotalDB,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the number of VT API queries/minute. (default=4)')]
-    [int]$Queries=4,
+    [int]$Queries=1000,
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Do not export the results to a CSV file.')]
+    [switch]$DoNotExportCsvResults,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Clear the existing API key.')]
     [switch]$ForceClearApiKey
 )
@@ -275,6 +279,10 @@ function Remove-VTApiKey {
 }
 
 
+# Load running process information produced from the Get-Process PowerShell cmdlet that also includes
+# additional code to hashes image files.  This is produced from the FakeHyena code.  Then create unique
+# results based on the file hash and image path.  There may be duplicate hashes if the image file is
+# located in different paths.
 function Import-ExeCsvData {
     Param([Parameter(Position=0,Mandatory=$true)][System.IO.FileInfo]$file)
 
@@ -296,84 +304,127 @@ function Import-ExeCsvData {
 [SecureString]$secStrApiKey | Out-Null
 
 if($ForceClearApiKey) {
-    $secStrApiKey.Clear()
+    if ($secStrApiKey) {
+        $secStrApiKey.Clear()
+        Write-Output 'API key was cleared'
+    }
 }
 
 # if the script is run multiple times only prompt for the API key the first time (or if it is force cleared)
-if($secStrApiKey.Length -eq 0) {
+if(-not $secStrApiKey) {
     $secStrApiKey = Read-Host 'Enter VirusTotal API Key' -AsSecureString
     Set-VTApiKey $([System.Net.NetworkCredential]::new('', $secStrApiKey).Password)
 }
 
-# load the existing local copy of the VT database
-
-if(Test-Path .\VTDB_*.json) {
-    $VTDB = Get-Content .\VTDB_*.json | ConvertFrom-Json
-} else {
-    Write-Output 'No local VT database '
-}
-
-<# NOTES
-$proc = Get-Process
-foreach($p in $proc) {
-    Add-Member -InputObject $p -NotePropertyName 'Hash' -NotePropertyValue (Get-FileHash $p.Path).Hash
-}
-#>
- 
+# format the running process data and get unique entries
 $sortedUniqueExes = Import-ExeCsvData $CsvFile
+
+# load a copy of a local VT database if it exists
+if($VirusTotalDB -or (Test-Path .\VTDB_*.json)) {
+    if ($VirusTotalDB) {
+        [System.Collections.ArrayList]$VTDB = Get-Content $VirusTotalDB | ConvertFrom-Json
+    } else {
+        [System.Collections.ArrayList]$VTDB = Get-Content .\VTDB_*.json | ConvertFrom-Json
+    }
+    Write-Output 'Local VT database was loaded'
+
+    $count = 0
+    foreach ($exe in $sortedUniqueExes) {
+        foreach ($entry in $VTDB) {
+            # make sure the hash and image file path match
+            if ($exe.Hash -eq $entry.Hash -and $exe.Path -eq $entry.Path) {
+                $exe.Positives = $entry.Positives
+                $exe.Total = $entry.Total
+                $exe.ScanDate = $entry.ScanDate
+                $exe.ScanResults = "$($entry.ScanResults)"
+                $exe.Link = $entry.Link
+                $count++
+            }
+        }
+    }
+    Write-Output "$count entries were found in the local VirusTotal database."
+
+} else {
+    Write-Output 'No local VT database. Generating'
+}
+
 
 # rate limit to $queries/min
 $count = 0      # tracks VT request rate limit
 $counter = 0    # tracks Write-Progress
-
-$Queries = 500
+$counter2 = 0
 
 foreach ($entry in $sortedUniqueExes) {
     $activity        = "Get-VTReport ($($counter) of $($sortedUniqueExes.Length))"
     $currentStatus   = "Getting results for $($entry.Path)"
     $percentComplete = [int](($counter/$sortedUniqueExes.Length) * 100)
     Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete
-
-    $report = Get-VTReport -hash $entry.Hash
-
-    if ($report.response_code -eq 1) {
-        $entry.Positives = [int]$report.positives
-        $entry.Total     = [int]$report.total
-        $entry.ScanDate  = [datetime]$report.scan_date
-        $entry.Link      = "$($report.permalink)"
-
-        # get A/V vendor name and result for positive results
-        if($report.positives -gt 0) {
-            $r = New-Object System.Collections.ArrayList
-
-            $report.scans.PSObject.Properties |
-                ForEach-Object {
-                    if($_.Value.detected) {
-                        $r.Add("$($_.Name)=$($_.Value.result)") | Out-Null
-                    }
-                }
-            $entry.ScanResults = $r
-        }
-
-    } elseif ($report.response_code -eq 0) {
-        $entry.Positives = 0
-        $entry.Total     = 0
-
-    } else {
-        Write-Output "VT response code other than 0 or 1 was returned"
-        Write-Output "$($entry.Name): $($entry.Hash)"
-    }
     
-    # rate limit the submissions
-    $count++
-    $counter++
-    if (($count % $Queries) -eq 0) {
-        Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete -CurrentOperation "Rate limit reached. Pausing."
-        $count = 0
-        Start-Sleep -Seconds 10
+    # query VT API using the image hash if there is no existing data for the current executable
+    if ($entry.Total -eq $null) {
+        $report = Get-VTReport -hash $entry.Hash
+
+        if ($report.response_code -eq 1) {
+            $entry.Positives = [int]$report.positives
+            $entry.Total     = [int]$report.total
+            $entry.ScanDate  = [datetime]$report.scan_date
+            $entry.Link      = "$($report.permalink)"
+
+            # get A/V vendor name and result for positive results
+            if($report.positives -gt 0) {
+                $r = New-Object System.Collections.ArrayList
+
+                $report.scans.PSObject.Properties |
+                    ForEach-Object {
+                        if($_.Value.detected) {
+                            $r.Add("$($_.Name)=$($_.Value.result)") | Out-Null
+                        }
+                    }
+                $entry.ScanResults = $r
+            }
+
+            # add the new entry to the local VirusTotal database
+            if ($VTDB) {
+                $VTDB.Add($entry) | Out-Null
+                $counter2++
+            }
+
+        } elseif ($report.response_code -eq 0) {
+            $entry.Positives = 0
+            $entry.Total     = 0
+
+        } else {
+            Write-Output "VT response code other than 0 or 1 was returned"
+            Write-Output "$($entry.Name): $($entry.Hash)"
+        }
+    
+        # rate limit the submissions
+        $count++
+        if (($count % $Queries) -eq 0) {
+            Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete -CurrentOperation "Rate limit reached. Pausing."
+            $count = 0
+            Start-Sleep -Seconds 10
+        }
     }
+
+    $counter++
 }
 
-$sortedUniqueExes | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
+Write-Output "$counter2 entries were added to the local VirusTotal database"
+
+# if an existing local VirusTotal database file was used, write the updated version to file
+# otherwise create a new database file from the current hashed file set
+if ($VTDB) {
+    $VTDB | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
+    Write-Output 'Updated existing VirusTotal database'
+} else {
+    $sortedUniqueExes | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
+    Write-Output 'New VirusTotal database written'
+}
+
+if (-not $DoNotExportCsvResults) {
+    $sortedUniqueExes | Export-Csv "virus_total_results.csv" -NoTypeInformation
+    Write-Output 'CSV results saved'
+}
 
 Remove-VTApiKey
