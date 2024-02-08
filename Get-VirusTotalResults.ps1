@@ -45,7 +45,7 @@ Param (
 # They are available for download from:
 #   https://archive.codeplex.com/?p=psvirustotal
 # 
-# It was released under the Microsoft Public License (Ms-PL)
+# It was released under the MIT license
 #
 ####################################################################
 
