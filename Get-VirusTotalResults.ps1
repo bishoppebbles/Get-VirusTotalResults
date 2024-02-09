@@ -14,7 +14,7 @@
 .NOTES
     File Name : VirusTotal.ps1 incorporates code that is copied from David B Heise's VirusTotal.psm1.
     Author    : David B Heise, Sam Pursglove
-    Version: 0.1
+    Version: 0.11
     Date: 08 February 2024
 .LINK
     https://github.com/DBHeise/Powershell/blob/master/Modules/VirusTotal/VirusTotal.psm1
@@ -306,7 +306,7 @@ function Import-ExeCsvData {
 if($ForceClearApiKey) {
     if ($secStrApiKey) {
         $secStrApiKey.Clear()
-        Write-Output 'API key was cleared'
+        Write-Output 'API key was cleared.'
     }
 }
 
@@ -326,7 +326,7 @@ if($VirusTotalDB -or (Test-Path .\VTDB_*.json)) {
     } else {
         [System.Collections.ArrayList]$VTDB = Get-Content .\VTDB_*.json | ConvertFrom-Json
     }
-    Write-Output 'Local VT database was loaded'
+    Write-Output 'Local VirusTotal database was loaded.'
 
     $count = 0
     foreach ($exe in $sortedUniqueExes) {
@@ -345,7 +345,7 @@ if($VirusTotalDB -or (Test-Path .\VTDB_*.json)) {
     Write-Output "$count entries were found in the local VirusTotal database."
 
 } else {
-    Write-Output 'No local VT database. Generating'
+    Write-Output 'No local VirusTotal database. Generating a new one.'
 }
 
 
@@ -410,21 +410,21 @@ foreach ($entry in $sortedUniqueExes) {
     $counter++
 }
 
-Write-Output "$counter2 entries were added to the local VirusTotal database"
+Write-Output "$counter2 entries were added to the local VirusTotal database."
 
 # if an existing local VirusTotal database file was used, write the updated version to file
 # otherwise create a new database file from the current hashed file set
 if ($VTDB) {
     $VTDB | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
-    Write-Output 'Updated existing VirusTotal database'
+    Write-Output 'Writing new updated VirusTotal database.'
 } else {
     $sortedUniqueExes | ConvertTo-Json | Out-File -FilePath "VTDB_$(Get-Date -Format FileDateUniversal).json"
-    Write-Output 'New VirusTotal database written'
+    Write-Output 'Writing new VirusTotal database.'
 }
 
 if (-not $DoNotExportCsvResults) {
     $sortedUniqueExes | Export-Csv "virus_total_results.csv" -NoTypeInformation
-    Write-Output 'CSV results saved'
+    Write-Output 'VirusTotal CSV results saved.'
 }
 
 Remove-VTApiKey
