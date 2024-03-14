@@ -24,7 +24,7 @@ By default the VT API submission rate is limited to 1000 API submissions before 
 
 `.\Get-VirusTotalResults.ps1 -CsvFile .\process.csv -Queries 4`
 
-* Same as the above but rate limits the VT API queries to 4/minute.  The default is set to 1000/minute.
+* Same as the above but rate limits the VT API queries to 4 with a 60 second sleep.  The default is set to 1000 VT API queries before a 60 second sleep.
 
 `.\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VirusTotalDB ..\vtdb\VTDB_20240209Z.json`
 
