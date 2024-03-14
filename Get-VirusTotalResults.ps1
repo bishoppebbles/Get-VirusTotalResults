@@ -1,29 +1,38 @@
 <#
 .SYNOPSIS
-    Virus Total Module
+    This PowerShell cmdlet allows you to batch submit process hashes via the VirusTotal (VT) API.  It incorporates @DBHeise VirusTotal.psm1 for VirusTotal API interaction.  The code uses as input the processes.csv output from the Collect-ADDomainData.ps1 (i.e., FakeHyena) script.
 .DESCRIPTION
-    Powershell Module for interaction with Virus Total's API
+    This script prompts the user for their VirusTotal API key.  It then imports a CSV file produced from the Collect-ADDomainData.ps1 script by @bishoppebbles that includes process name, path, and hash information.  Get-VirusTotalResults is processed to create unique entries based on the process's path and hash (i.e., if the hash is the same but it was located in a different path there would be two separate entries).  If there is no local json database file, all process file hashes are submitted to VT for analysis.  Note that only hashes are submitted, no file data.  The results are written to a CSV with the following fields: Name, Path, Hash, Positives, Total, ScanDate, ScanResults (A/V scan engine(s) with positive results), Link (VT results link).  A local json database file is also written for optional later reuse.  If a local json database exists from a previous scan, the current process hash data is first compared against this database for any matching results.  Then only the remaining entries are submitted to VT for review.  A new, updated json database file with the total cumulative results are then written to disk for later optional reuse.
+
+    By default the VT API submission rate is limited to 1000 API submissions before the code will sleep for 60 seconds.  This is effectively no rate limit as it's unlikely 1000 submissions will be required in a mostly homogenous enterprise computing environment, at least based on my tests (i.e., there are not going to be that many unique running processes).  However, if you have a small VT API submission rate (e.g., 4/minute) this can be used to slowly submit your process hash data.  This feature hasn't been thoroughly tested.  
 .PARAMETER CsvFile
     The CSV file to import containing the process name, path, and hash information.
-.PARAMETER VTDB
+.PARAMETER VirusTotalDB
     The CSV file to import containing the process name, path, and hash information.
 .PARAMETER Queries
-    Rate limit for the number of VirusTotal API queries to make per minutes (default = 4).
+    Rate limit for the number of VirusTotal API queries before a 60 second sleep (default = 1000).
+.PARAMETER DoNotExportCsvResults
+    Switch parameter to not write the CSV results to file.  This would only write a new json database file of the analysis.
 .PARAMETER ForceClearApiKey
     Clear an existing API key entry so a new one can be entered.
 .NOTES
-    File Name : VirusTotal.ps1 incorporates code that is copied from David B Heise's VirusTotal.psm1.
-    Author    : David B Heise, Sam Pursglove
-    Version: 0.12
-    Date: 14 March 2024
+    File Name : VirusTotal.ps1 - incorporates code that is copied from David B Heise's VirusTotal.psm1.
+    Author    : Sam Pursglove, David B Heise (VT API)
+    Version   : 0.13
+    Date      : 14 March 2024
 .LINK
     https://github.com/DBHeise/Powershell/blob/master/Modules/VirusTotal/VirusTotal.psm1
+    https://github.com/bishoppebbles/Collect-ADDomainData
 .EXAMPLE
     .\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv
 
     Submits the process hash data taken from the Collect-ADDomainData.ps1 (i.e., FakeHyena) script.  By default it will look for a local JSON VT database file in the current working directory for previous VT queries and use any existing matches from that.  If not present, all values are submited to VT.  An updated new VT JSON database file is written to disk.
 .EXAMPLE
-    .\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VTDB ..\vtdb\VTDB_20240209Z.json
+    .\Get-VirusTotalResults.ps1 -CsvFile .\process.csv -Queries 4
+
+    Same as the above but rate limits the VT API queries to 4/minute.  The default is set to 1000/minute.
+.EXAMPLE
+    .\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VirusTotalDB ..\vtdb\VTDB_20240209Z.json
 
     Submits the process hash data taken from the Collect-ADDomainData.ps1 (i.e., FakeHyena) script.  Looks in a non-default location for an existing JSON VT database file for previous VT queries and use any existing matches from that.  An updated new VT JSON database file is written to disk.
 #>
@@ -33,7 +42,7 @@ Param (
     [string]$CsvFile,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Explicitly set the existing local VirusTotal database.')]
     [string]$VirusTotalDB,
-    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the number of VT API queries/minute. (default=4)')]
+    [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Set the number of VT API queries before a 60 second sleep. (default=1000)')]
     [int]$Queries=1000,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Do not export the results to a CSV file.')]
     [switch]$DoNotExportCsvResults,
@@ -409,7 +418,7 @@ foreach ($entry in $sortedUniqueExes) {
         if (($count % $Queries) -eq 0) {
             Write-Progress -Activity $activity -Status $currentStatus -PercentComplete $percentComplete -CurrentOperation "Rate limit reached. Pausing."
             $count = 0
-            Start-Sleep -Seconds 10
+            Start-Sleep -Seconds 60
         }
     }
 
