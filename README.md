@@ -8,7 +8,7 @@ By default the VT API submission rate is limited to 1000 API submissions before 
 ### Options
 * `CsvFile`
   * The CSV file to import containing the process name, path, and hash information.
-* `VTDB`
+* `VirusTotalDB`
   * The CSV file to import containing the process name, path, and hash information.
 * `Queries`
   * Rate limit for the number of VirusTotal API queries per minutes (default = 1000).
@@ -26,6 +26,6 @@ By default the VT API submission rate is limited to 1000 API submissions before 
 
 * Same as the above but rate limits the VT API queries to 4/minute.  The default is set to 1000/minute.
 
-`.\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VTDB ..\vtdb\VTDB_20240209Z.json`
+`.\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VirusTotalDB ..\vtdb\VTDB_20240209Z.json`
 
 * Submits the process hash data taken from the `Collect-ADDomainData.ps1` (i.e., FakeHyena) script.  Looks in a non-default location for an existing JSON VT database file for previous VT queries and use any existing matches from that.  An updated new VT JSON database file is written to disk.
