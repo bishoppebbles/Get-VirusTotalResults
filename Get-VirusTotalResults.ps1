@@ -14,16 +14,22 @@
 .NOTES
     File Name : VirusTotal.ps1 incorporates code that is copied from David B Heise's VirusTotal.psm1.
     Author    : David B Heise, Sam Pursglove
-    Version: 0.11
-    Date: 08 February 2024
+    Version: 0.12
+    Date: 14 March 2024
 .LINK
     https://github.com/DBHeise/Powershell/blob/master/Modules/VirusTotal/VirusTotal.psm1
 .EXAMPLE
+    .\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv
 
+    Submits the process hash data taken from the Collect-ADDomainData.ps1 (i.e., FakeHyena) script.  By default it will look for a local JSON VT database file in the current working directory for previous VT queries and use any existing matches from that.  If not present, all values are submited to VT.  An updated new VT JSON database file is written to disk.
+.EXAMPLE
+    .\Get-VirusTotalResults.ps1 -CsvFile .\processes.csv -VTDB ..\vtdb\VTDB_20240209Z.json
+
+    Submits the process hash data taken from the Collect-ADDomainData.ps1 (i.e., FakeHyena) script.  Looks in a non-default location for an existing JSON VT database file for previous VT queries and use any existing matches from that.  An updated new VT JSON database file is written to disk.
 #>
 
 Param (
-    [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the file to scan.')]
+    [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$false,HelpMessage='Provide the CSV file to scan.')]
     [string]$CsvFile,
     [Parameter(Mandatory=$false,ValueFromPipeline=$false,HelpMessage='Explicitly set the existing local VirusTotal database.')]
     [string]$VirusTotalDB,
